@@ -1,0 +1,46 @@
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+    ServerName nitter.heissa.de
+
+
+    # Tweet-Detailseiten sind der einzige Pfad, der pro Abruf einen X-API-Call
+    # ausloest (Scraper holen lauter unbekannte IDs, also immer Cache-Miss) und
+    # damit die eigene Session zu X belastet. Alles andere - Profile, RSS,
+    # Suche, Bilder, Statik - bleibt bewusst fuer alle offen.
+    <LocationMatch "^/[A-Za-z0-9_]+/status/[0-9]+">
+        Require ip 127.0.0.1 ::1 <eigene-IPv4> 74.208.77.214 <vps-ipv4>
+        Require ip <eigenes-IPv6-Praefix>::/64 2607:f1c0:f081:e500::/64
+        Require ip 10.8.0.0/24 10.9.0.0/24 192.168.5.0/24 192.168.178.0/24
+    </LocationMatch>
+
+
+    # Archiv-Gateway: Profilseiten laufen ueber gateway.php. Liefert die Instanz
+    # eine echte Zeitleiste, wird sie unveraendert durchgereicht; sonst kommt
+    # dieselbe Ansicht aus wagodb.nitter_posts - ohne Umschalten in der App.
+    Alias /_archive /var/www/nitter_archive
+    <Directory /var/www/nitter_archive>
+        Require all granted
+    </Directory>
+    ProxyPass /_archive !
+    ProxyPassMatch "^/(?!about$|settings$|search$|explore$|css$|js$|pic$|fonts$|robots\\.txt$)[A-Za-z0-9_][A-Za-z0-9_,]{0,120}/?$" !
+
+    RewriteEngine On
+    RewriteRule "^/(?!about$|settings$|search$|explore$|css$|js$|pic$|fonts$)([A-Za-z0-9_][A-Za-z0-9_,]{0,120})/?$" /_archive/gateway.php?u=$1 [QSA,PT,L]
+    ProxyPreserveHost On
+    ProxyPass        / http://127.0.0.1:9497/
+    ProxyPassReverse / http://127.0.0.1:9497/
+
+    # identisch zu nitter.conf (Port 9495), damit nitter_log_import.py
+    # auch die Suchen ueber diesen Host mitbekommt
+    LogFormat "%h %{%Y-%m-%d %H:%M:%S}t %q" nitter_search
+    SetEnvIf Request_URI "^/search" nitter_is_search
+    CustomLog /var/log/apache2/nitter_search.log nitter_search env=nitter_is_search
+    CustomLog ${APACHE_LOG_DIR}/nitter_access.log combined
+    ErrorLog  ${APACHE_LOG_DIR}/nitter_error.log
+
+    SSLEngine on
+    Include /etc/letsencrypt/options-ssl-apache.conf
+    SSLCertificateFile    /etc/letsencrypt/live/heissa.de/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/heissa.de/privkey.pem
+</VirtualHost>
+</IfModule>

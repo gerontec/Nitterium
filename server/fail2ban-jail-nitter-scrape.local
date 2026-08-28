@@ -1,0 +1,15 @@
+[nitter-scrape]
+enabled  = true
+filter   = nitter-scrape
+logpath  = /var/log/apache2/nitter_access.log
+backend  = polling
+port     = http,https,9495
+# angemessenes Mass: 30 Tweet-Seiten in 10 min pro IP, danach Sperre
+maxretry = 30
+findtime = 10m
+bantime  = 1h
+bantime.increment = true
+bantime.factor    = 2
+bantime.maxtime   = 1d
+# eigene Netze duerfen unbegrenzt pollen
+ignoreip = 127.0.0.1/8 ::1 <eigene-IPv4> <eigenes-IPv6-Praefix>/64 10.8.0.0/24 10.9.0.0/24 192.168.0.0/16
