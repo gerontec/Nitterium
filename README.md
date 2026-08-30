@@ -1,3 +1,10 @@
+> **Dieser Abzweig:** eigener Build für die Instanz **nitter.heissa.de** —
+> Standard-Instanz, Abo-Vorbelegung, **Zugangsschlüssel je Instanz** (auch per
+> QR-Code) und die komplette Serverseite der Instanz.
+> Alles dazu steht in **[README.heissa.md](README.heissa.md)**, der Serverteil
+> unter [`server/`](server/). Der Text unten ist die Beschreibung des
+> Ursprungsprojekts [kaleedtc/Nitterium](https://github.com/kaleedtc/Nitterium).
+
 <p align="left">
   <img src="assets/Nitterium.png" width="80" alt="Nitterium Logo">
 </p>
