@@ -144,15 +144,15 @@ class UserPreferencesRepository(
     }
 
     /**
-     * Zugangsschluessel je Instanz, abgelegt als JSON `{host: schluessel}`.
+     * Access keys per instance, stored as JSON `{host: key}`.
      *
-     * Manche Instanzen - selbst betriebene zumal - geben teure Pfade nur
-     * Anfragen frei, die sich ausweisen koennen. Der Schluessel gehoert
-     * deshalb zur Instanz und nicht zur App: er geht ausschliesslich an den
-     * Host, fuer den er eingetragen wurde, und nie an eine andere Instanz.
+     * Some instances - self-hosted ones in particular - only serve their
+     * expensive paths to requests that can identify themselves. The key
+     * therefore belongs to the instance, not to the app: it is sent to the
+     * host it was entered for and never to any other instance.
      */
     val instanceKeys: Flow<Map<String, String>> = context.dataStore.data
-        .map { preferences -> leseSchluessel(preferences[PreferencesKeys.INSTANCE_KEYS]) }
+        .map { preferences -> readKeys(preferences[PreferencesKeys.INSTANCE_KEYS]) }
 
     fun instanceKeyFor(url: String): Flow<String> =
         instanceKeys.map { it[hostOf(url)] ?: "" }
@@ -160,14 +160,14 @@ class UserPreferencesRepository(
     suspend fun setInstanceKey(url: String, key: String) {
         val host = hostOf(url)
         context.dataStore.edit { preferences ->
-            val map = leseSchluessel(preferences[PreferencesKeys.INSTANCE_KEYS]).toMutableMap()
+            val map = readKeys(preferences[PreferencesKeys.INSTANCE_KEYS]).toMutableMap()
             if (key.isBlank()) map.remove(host) else map[host] = key.trim()
             preferences[PreferencesKeys.INSTANCE_KEYS] = Json.encodeToString(map)
         }
     }
 
     companion object {
-        private fun leseSchluessel(raw: String?): Map<String, String> =
+        private fun readKeys(raw: String?): Map<String, String> =
             if (raw.isNullOrBlank()) emptyMap()
             else try {
                 Json.decodeFromString<Map<String, String>>(raw)
@@ -175,7 +175,7 @@ class UserPreferencesRepository(
                 emptyMap()
             }
 
-        /** Nur der Host zaehlt - Schema, Port und Schraegstriche nicht. */
+        /** Only the host matters - not the scheme, the port or trailing slashes. */
         fun hostOf(url: String): String = try {
             java.net.URI(url.trim()).host?.lowercase() ?: url.trim().lowercase()
         } catch (_: Exception) {

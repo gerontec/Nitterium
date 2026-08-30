@@ -276,12 +276,12 @@ fun AppSettingsList(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Zugangsschluessel der gewaehlten Instanz. Er geht als Zusatz im
-            // User-Agent mit und nur an diesen Host - Instanzen, die teure
-            // Pfade nur Bekannten oeffnen, lassen die App damit durch.
-            // Eigener Tippzustand: der gespeicherte Wert kommt asynchron aus dem
-            // DataStore zurueck: haengt das Feld direkt daran, ueberholt jede
-            // schnelle Eingabe den Rueckweg und einzelne Zeichen gehen verloren.
+            // Access key of the selected instance. It rides along in the user
+            // agent and goes to this host only - instances that keep expensive
+            // paths behind an allowlist let the app through with it.
+            // Local typing state: the stored value comes back from the DataStore
+            // asynchronously. Bound straight to it, fast typing overtakes the
+            // round trip and single characters are dropped.
             var keyInput by rememberSaveable(state.instanceUrl) { mutableStateOf(state.instanceKey) }
             LaunchedEffect(state.instanceKey) {
                 if (keyInput.isEmpty() && state.instanceKey.isNotEmpty()) keyInput = state.instanceKey

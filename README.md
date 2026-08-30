@@ -1,9 +1,9 @@
-> **Dieser Abzweig:** eigener Build für die Instanz **nitter.heissa.de** —
-> Standard-Instanz, Abo-Vorbelegung, **Zugangsschlüssel je Instanz** (auch per
-> QR-Code) und die komplette Serverseite der Instanz.
-> Alles dazu steht in **[README.heissa.md](README.heissa.md)**, der Serverteil
-> unter [`server/`](server/). Der Text unten ist die Beschreibung des
-> Ursprungsprojekts [kaleedtc/Nitterium](https://github.com/kaleedtc/Nitterium).
+> **This fork:** own build for the instance **nitter.heissa.de** — default
+> instance, seeded subscriptions, an **access key per instance** (QR code
+> included) and the complete server side of that instance.
+> Everything about it is in **[README.heissa.md](README.heissa.md)**, the server
+> part under [`server/`](server/). The text below is the description of the
+> upstream project [kaleedtc/Nitterium](https://github.com/kaleedtc/Nitterium).
 
 <p align="left">
   <img src="assets/Nitterium.png" width="80" alt="Nitterium Logo">

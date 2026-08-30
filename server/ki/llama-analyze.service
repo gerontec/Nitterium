@@ -1,0 +1,55 @@
+[Unit]
+Description=llama.cpp Analyse-Server (CPU, Qwen3-30B-A3B Q6_K) - Port 8081
+After=network.target
+
+[Service]
+# Bewusst CPU statt GPU: die Tesla P4 ist passiv gekuehlt, drosselt unter Last
+# auf 455 von 1531 MHz (90 Grad) und liefert dann nur ~3 Tokens/s. Der i7-12700
+# hat 12 Kerne und 62 GB RAM - die GPU bleibt so frei fuer die Kamera-Daemons.
+#
+# Modellwechsel 28.08.2026 von Mistral 7B auf Qwen3-30B-A3B. Gemessener
+# Vergleich an 30 Posts: 0.19 statt 0.13 Posts/s, Schema 100 statt 67 Prozent,
+# Stabilitaet 93 statt 82, und bei der KIVI-Vorpruefung 0 statt 33 Prozent
+# Falschalarm auf harmlosen Kontrollsaetzen. Schneller trotz 25 GB, weil als
+# MoE nur 3 der 30 Mrd. Parameter je Token rechnen.
+#
+# threads 8 und parallel 4 sind gemessen, nicht geraten. Sweep vom 28.08.2026
+# ueber sieben Kombinationen: 12/16/20 Threads liegen 2-4 Prozent darunter,
+# 8/12/16 Slots 7-19 Prozent. Mehr hilft hier nichts.
+#
+# ctx-size 8192 = 2048 Token je Slot. Analyseanfragen liegen bei rund 450
+# Token Eingabe und 77 Token Ausgabe (gemessen), das reicht mit Abstand. Die
+# vorherigen 32768 stammten von der Chat-Konsole, die es nicht mehr gibt.
+#
+# --metrics oeffnet /metrics im Prometheus-Format. Ohne den Schalter antwortet
+# der Endpunkt mit 501, und man sieht Durchsatz und Warteschlange nicht.
+# /slots und /health sind ohnehin an.
+#
+# Trennung GPU / CPU, 29.08.2026:
+# Dieser Dienst laeuft ueber den CPU-only-Build (build-cpu), nicht ueber
+# build/. Der CUDA-Build reservierte trotz --n-gpu-layers 0 einen
+# Rechenpuffer auf der Tesla P4 - gemessen 1344 MiB fuer beide Dienste
+# zusammen, bei 7680 MiB Gesamtspeicher und 77 Grad im Leerlauf. Die Karte
+# gehoert den Kamera-Daemons cam1-ai und cam2-ai, die dort bereits 4121 MiB
+# halten.
+# Der Wechsel kostet nichts: 35.6 gegen 35.7 Token/s an derselben Last
+# gemessen, also kein Unterschied.
+#
+# Nicht uebernommen wurden --no-mmap, --mlock und THP=always. Gemessen am
+# 29.08.2026 halbieren sie den Durchsatz (15.8 statt 35.6 Token/s), obwohl
+# THP nachweislich griff (9992 MB grosse Seiten, 24,3 GB anonym). Die
+# Vermutung, TLB-Fehltritte seien der Engpass, ist damit widerlegt.
+# Mit mmap teilen sich beide Dienste ausserdem die 25 GB Gewichte im
+# Seitencache - physisch liegen sie nur einmal im Speicher.
+ExecStart=/home/gh/llama.cpp/build-cpu/bin/llama-server \
+    --model /home/gh/models/qwen3-30b-a3b-q6k.gguf \
+    --n-gpu-layers 0 --threads 8 --ctx-size 8192 --parallel 4 \
+    --host 0.0.0.0 --port 8081 --no-warmup \
+    --metrics --log-timestamps --log-prefix
+Restart=on-failure
+RestartSec=5
+User=gh
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

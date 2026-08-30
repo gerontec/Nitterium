@@ -1,11 +1,11 @@
 <?php
 /**
- * gateway.php – transparenter Vorschalter fuer Nitter-Profilseiten.
+ * gateway.php - transparent front end for Nitter profile pages.
  *
- * Holt die Seite von der Instanz. Kommt eine echte Zeitleiste zurueck, wird sie
- * unveraendert durchgereicht. Liefert Nitter nichts Brauchbares (Rate-Limit,
- * leere Zeitleiste trotz HTTP 200, Backend weg), wird dieselbe Ansicht aus
- * wagodb.nitter_posts gerendert. Kein Umschalten noetig.
+ * Fetches the page from the instance. If a real timeline comes back it is
+ * passed through unchanged. If Nitter returns nothing usable (rate limit, empty
+ * timeline despite HTTP 200, backend gone), the same view is rendered from
+ * wagodb.nitter_posts. No switching required.
  */
 
 const BACKEND   = "http://127.0.0.1:9497";
@@ -16,7 +16,7 @@ $db_user = "gh";
 $db_pass = getenv("NITTER_DB_PASS") ?: "";
 $db_name = "wagodb";
 
-// Die App laedt ihren Feed als /<user1>,<user2> - Komma-Liste zulassen
+// The app loads its feed as /<user1>,<user2> - allow comma lists
 $user  = (string)($_GET["u"] ?? "");
 $users = array_values(array_filter(explode(",", $user), static fn($u) =>
     preg_match("~^[A-Za-z0-9_]{1,15}$~", $u) === 1));
@@ -26,7 +26,7 @@ if (!$users) {
 }
 $title = "@" . implode(", @", $users);
 
-// Query-String ohne unser eigenes u= weiterreichen (z. B. ?cursor=... beim Blaettern)
+// Pass the query string on without our own u= (e.g. ?cursor=... when paging)
 $params = $_GET;
 unset($params["u"]);
 $qs  = $params ? "?" . http_build_query($params) : "";
@@ -55,7 +55,7 @@ curl_close($ch);
 $head = $raw === false ? "" : substr($raw, 0, $hdr_size);
 $body = $raw === false ? "" : substr($raw, $hdr_size);
 
-// Brauchbar = HTTP 200 mit mindestens einem echten Tweet in der Zeitleiste
+// Usable = HTTP 200 with at least one real tweet in the timeline
 $usable = ($code === 200 && str_contains($body, "timeline-item"));
 
 if ($usable) {
@@ -69,7 +69,7 @@ if ($usable) {
     exit;
 }
 
-// ---- Archiv aus der Datenbank ------------------------------------------------
+// ---- Archive from the database -----------------------------------------------
 
 $rows = [];
 try {
@@ -89,7 +89,7 @@ try {
     $rows = [];
 }
 
-// Nichts im Archiv: dann lieber die Originalantwort der Instanz zeigen
+// Nothing in the archive: show the instance's original response instead
 if (!$rows) {
     if ($raw !== false && $body !== "") {
         foreach (explode("\r\n", $head) as $line) {

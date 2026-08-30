@@ -1,0 +1,57 @@
+[Unit]
+Description=llama.cpp Auftrags-Server (CPU, Qwen3-30B-A3B Q6_K) - Port 8082
+After=network.target
+
+[Service]
+# Zweiter Dienst neben llama-analyze, weil beide Verbraucher gegensaetzliche
+# Anforderungen haben:
+#
+#   llama-analyze (8081)  270.000 Nitter-Posts, je ~450 Token Eingabe.
+#                         Viele kleine Slots, Dauerlast, Vorrang.
+#   llama-jobs    (8082)  Auftraege des Schedulers mit Werkzeugen. Der
+#                         Systemprompt allein ist ~2000 Token, dazu kommen
+#                         abgerufene Webseiten und Zeitungsausschnitte.
+#                         Wenige Slots mit viel Kontext, stossweise.
+#
+# Der Anlass war handfest: mit 8192 Kontext auf 4 Slots (2048 je Slot) brach
+# Auftrag #38 mitten im Werkzeugaufruf ab - 2020 Token Eingabe liessen 28 fuer
+# die Antwort, die URL im JSON blieb unvollstaendig. Hier sind es 2 Slots zu
+# 16384 Token.
+#
+# Speicher: beide Dienste binden dieselbe Modelldatei per mmap ein und teilen
+# sich deren 25 GB im Seitencache (gemessen: Pss_File 24,6 GB). Je Instanz
+# kommen nur rund 1,3 GB fuer KV-Cache und Puffer hinzu.
+#
+# Vorrang fuer die Analyse: CPUWeight 100 gegen 1000, dazu Nice 15. Die
+# Threadzahl ist bewusst kleiner als das gemessene Optimum von 8 - der
+# Auftragsdienst soll der Analyse keine Rechenzeit wegnehmen.
+#
+# Trennung GPU / CPU, 29.08.2026:
+# Dieser Dienst laeuft ueber den CPU-only-Build (build-cpu), nicht ueber
+# build/. Der CUDA-Build reservierte trotz --n-gpu-layers 0 einen
+# Rechenpuffer auf der Tesla P4 - gemessen 1344 MiB fuer beide Dienste
+# zusammen, bei 7680 MiB Gesamtspeicher und 77 Grad im Leerlauf. Die Karte
+# gehoert den Kamera-Daemons cam1-ai und cam2-ai, die dort bereits 4121 MiB
+# halten.
+# Der Wechsel kostet nichts: 35.6 gegen 35.7 Token/s an derselben Last
+# gemessen, also kein Unterschied.
+#
+# Nicht uebernommen wurden --no-mmap, --mlock und THP=always. Gemessen am
+# 29.08.2026 halbieren sie den Durchsatz (15.8 statt 35.6 Token/s), obwohl
+# THP nachweislich griff (9992 MB grosse Seiten, 24,3 GB anonym). Die
+# Vermutung, TLB-Fehltritte seien der Engpass, ist damit widerlegt.
+# Mit mmap teilen sich beide Dienste ausserdem die 25 GB Gewichte im
+# Seitencache - physisch liegen sie nur einmal im Speicher.
+ExecStart=/home/gh/llama.cpp/build-cpu/bin/llama-server \
+    --model /home/gh/models/qwen3-30b-a3b-q6k.gguf \
+    --n-gpu-layers 0 --threads 6 --ctx-size 32768 --parallel 2 \
+    --host 0.0.0.0 --port 8082 --no-warmup \
+    --metrics --log-timestamps --log-prefix
+Restart=on-failure
+RestartSec=5
+User=gh
+Nice=15
+CPUWeight=100
+
+[Install]
+WantedBy=multi-user.target

@@ -3,24 +3,24 @@
     ServerName nitter.heissa.de
 
 
-    # Tweet-Detailseiten sind der einzige Pfad, der pro Abruf einen X-API-Call
-    # ausloest (Scraper holen lauter unbekannte IDs, also immer Cache-Miss) und
-    # damit die eigene Session zu X belastet. Alles andere - Profile, RSS,
-    # Suche, Bilder, Statik - bleibt bewusst fuer alle offen.
+    # Tweet detail pages are the only path that triggers an X API call per
+    # request (scrapers ask for unknown IDs, so every hit is a cache miss) and
+    # therefore loads our own session against X. Everything else - profiles,
+    # RSS, search, images, static files - stays deliberately open to everyone.
     <LocationMatch "^/[A-Za-z0-9_]+/status/[0-9]+">
-        Require ip 127.0.0.1 ::1 <eigene-IPv4> 74.208.77.214 <vps-ipv4>
-        Require ip <eigenes-IPv6-Praefix>::/64 2607:f1c0:f081:e500::/64
+        Require ip 127.0.0.1 ::1 <own-ipv4> 74.208.77.214 <vps-ipv4>
+        Require ip <own-ipv6-prefix>::/64 2607:f1c0:f081:e500::/64
         Require ip 10.8.0.0/24 10.9.0.0/24 192.168.5.0/24 192.168.178.0/24
-        # Ausweis statt fester Adresse: Nitterium haengt den je Instanz
-        # eingetragenen Schluessel an den User-Agent. Damit kommt die App
-        # aus jedem Netz durch - Mobilfunk und wechselnde Praefixe inklusive.
-        Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<schluessel>#"
+        # Credential instead of a fixed address: Nitterium appends the key
+        # entered for this instance to the user agent. That gets the app
+        # through from any network - mobile data and rotating prefixes too.
+        Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<key>#"
     </LocationMatch>
 
 
-    # Archiv-Gateway: Profilseiten laufen ueber gateway.php. Liefert die Instanz
-    # eine echte Zeitleiste, wird sie unveraendert durchgereicht; sonst kommt
-    # dieselbe Ansicht aus wagodb.nitter_posts - ohne Umschalten in der App.
+    # Archive gateway: profile pages go through gateway.php. If the instance
+    # returns a real timeline it is passed through unchanged; otherwise the same
+    # view comes from wagodb.nitter_posts - with no switch inside the app.
     Alias /_archive /var/www/nitter_archive
     <Directory /var/www/nitter_archive>
         Require all granted
@@ -34,8 +34,8 @@
     ProxyPass        / http://127.0.0.1:9497/
     ProxyPassReverse / http://127.0.0.1:9497/
 
-    # identisch zu nitter.conf (Port 9495), damit nitter_log_import.py
-    # auch die Suchen ueber diesen Host mitbekommt
+    # identical to nitter.conf (port 9495) so that nitter_log_import.py also
+    # sees the searches that come in over this host
     LogFormat "%h %{%Y-%m-%d %H:%M:%S}t %q" nitter_search
     SetEnvIf Request_URI "^/search" nitter_is_search
     CustomLog /var/log/apache2/nitter_search.log nitter_search env=nitter_is_search

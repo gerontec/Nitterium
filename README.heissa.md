@@ -1,188 +1,194 @@
-# Nitterium für nitter.heissa.de — App und Serverseite
+# Nitterium for nitter.heissa.de — app and server side
 
-Eigener Build von [kaleedtc/Nitterium](https://github.com/kaleedtc/Nitterium)
-(Kotlin/Jetpack Compose, WebView-Wrapper um eine Nitter-Instanz) plus die
-Serverkonfiguration, die die Instanz auf heissa.de am Leben hält, seit X das
-kostenlose Polling gestrichen hat.
+Own build of [kaleedtc/Nitterium](https://github.com/kaleedtc/Nitterium)
+(Kotlin/Jetpack Compose, a WebView wrapper around a Nitter instance) plus the
+server configuration that keeps the instance on heissa.de alive since X removed
+free polling.
 
-Ersetzt die eingestellte F-Droid-App `com.plexer0.nitter`, deren Quellcode nicht
-mehr verfügbar ist.
+Replaces the discontinued F-Droid app `com.plexer0.nitter`, whose source is no
+longer available.
 
 ---
 
 ## 1. App
 
-### Änderungen gegenüber Upstream
+### Changes against upstream
 
-| Datei | Änderung |
+| File | Change |
 |---|---|
 | `app/src/main/res/values/strings.xml` | `nitter_heissa_de_url` = `https://nitter.heissa.de` |
-| `ui/feature/settings/SettingsViewModel.kt` | eigene Instanz steht als erste in der Auswahl, Fallback beim Entfernen |
-| `data/repository/UserPreferencesRepository.kt` | Default-Instanz + Default-Tab `Feed` |
-| `ui/feature/settings/SettingsContract.kt`, `MainViewModel.kt`, `ui/NitteriumApp.kt` | Default-Tab `Feed` |
-| `data/repository/SubscriptionRepository.kt` | Erststart legt die Abos `SZwanglos` und `carol_herzog` an |
-| `data/repository/UserPreferencesRepository.kt`, `ui/common/NitterWebView.kt`, `ui/feature/settings/*`, `MainActivity.kt` | **Zugangsschlüssel je Instanz** — siehe unten |
-| `app/build.gradle.kts` | `lint { checkReleaseBuilds = false }` — AGP-Lint stürzt beim Analysieren ab (UAST/`AsyncExecutionService`-Bug) und blockiert sonst den Release-Build |
+| `ui/feature/settings/SettingsViewModel.kt` | own instance comes first in the list, fallback when it is removed |
+| `data/repository/UserPreferencesRepository.kt` | default instance + default tab `Feed` |
+| `ui/feature/settings/SettingsContract.kt`, `MainViewModel.kt`, `ui/NitteriumApp.kt` | default tab `Feed` |
+| `data/repository/SubscriptionRepository.kt` | first start seeds the first-order accounts `SZwanglos`, `carol_herzog`, `ZentraleV`, `SHomburg`, `Impf_Info` |
+| `data/repository/UserPreferencesRepository.kt`, `ui/common/NitterWebView.kt`, `ui/feature/settings/*`, `MainActivity.kt` | **access key per instance** — see below |
+| `app/build.gradle.kts` | `lint { checkReleaseBuilds = false }` — AGP lint crashes while analysing (UAST/`AsyncExecutionService` bug) and would otherwise block the release build |
 
-Die App lädt ihren Feed als `https://nitter.heissa.de/<user1>,<user2>` (Nitters
-Mehrfach-Timeline), Profile als `/<user>`. Pull-to-Refresh ist ein
-`webView.reload()` — es holt live von der Instanz, es gibt **keinen** Weg, aus
-der App den DB-Poller auf dem Server auszulösen.
+The app loads its feed as `https://nitter.heissa.de/<user1>,<user2>` (Nitter's
+multi timeline) and profiles as `/<user>`. Pull to refresh is a
+`webView.reload()` — it fetches live from the instance; there is **no** way to
+trigger the database poller on the server from inside the app.
 
-### Bauen
+### Building
 
 ```bash
 echo "sdk.dir=$HOME/Android/Sdk" > local.properties
-JAVA_HOME=/pfad/zu/jdk21 ./gradlew assembleRelease
+JAVA_HOME=/path/to/jdk21 ./gradlew assembleRelease
 zipalign -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk nitterium-heissa.apk
 apksigner sign --ks <keystore> nitterium-heissa.apk
 ```
 
-Voraussetzungen: **echtes JDK 21** — ein JRE reicht nicht (`javac` fehlt, Gradle
-bricht mit „Toolchain … does not provide the required capabilities:
-[JAVA_COMPILER]" ab). Android SDK; `compileSdk 37` lädt AGP selbst nach,
-`cmdline-tools` sind dafür nicht nötig, aber `~/Android/Sdk/licenses` muss
-existieren.
+Requirements: a **real JDK 21** — a JRE is not enough (`javac` missing, Gradle
+aborts with "Toolchain … does not provide the required capabilities:
+[JAVA_COMPILER]"). Android SDK; `compileSdk 37` is fetched by AGP itself, so
+`cmdline-tools` are not needed, but `~/Android/Sdk/licenses` has to exist.
 
+### Access key per instance
 
-### Zugangsschlüssel je Instanz
+The tweet detail pages of the instance are closed to strangers (see 2.3). An
+address list in the vhost only carries as long as the phone sits in the home
+WLAN: on mobile data, and after every prefix change of the router, the app drops
+out and gets a 403 on its own host.
 
-Die Tweet-Detailseiten der eigenen Instanz sind für Fremde gesperrt (siehe
-2.3). Eine Adressliste im vhost trägt aber nur, solange das Telefon im WLAN
-hängt: im Mobilfunk und nach jedem Präfixwechsel der FritzBox fällt die App
-heraus und bekommt auf dem eigenen Host ein 403.
+So the app identifies itself. Settings has a field below the instance URL,
+**Instance access key (optional)**; the value is stored per **host**
+(`instance_keys`, JSON `{host: key}`) and is appended to the user agent as
+` Nitterium/<key>` — to that one instance only, never to another. Without a key
+the app behaves exactly as before.
 
-Deshalb weist sich die App aus. In den Einstellungen steht unter der
-Instanz-URL ein Feld **Instance access key (optional)**; der Wert wird je
-**Host** gespeichert (`instance_keys`, JSON `{host: schlüssel}`) und hängt als
-` Nitterium/<schlüssel>` am User-Agent — nur an genau diese Instanz, nie an
-eine andere. Ohne Schlüssel verhält sich die App exakt wie vorher.
-
-Serverseite, eine Zeile im `LocationMatch`:
+Server side, one line inside the `LocationMatch`:
 
 ```apache
-Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<schlüssel>#"
+Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<key>#"
 ```
 
-**Eintragen ohne Tippen.** 32 Zeichen auf dem Telefon abzutippen geht schief —
-gemessen: aus `b208675f926a…` wurde `b8675f92a64c…`. Die App nimmt den
-Schlüssel deshalb auch über einen Verweis entgegen:
+**Entering it without typing.** Typing 32 characters on a phone goes wrong —
+measured: `b208675f926a…` came out as `b8675f92a64c…`. The app therefore also
+accepts the key from a link:
 
 ```
-nitterium://instance?url=https%3A%2F%2Fnitter.heissa.de&key=<schlüssel>
+nitterium://instance?url=https%3A%2F%2Fnitter.heissa.de&key=<key>
 ```
 
-Als QR-Code gedruckt reicht die normale Kamera-App — **keine
-Kamerabibliothek und keine Kameraberechtigung in Nitterium**. Die App
-bestätigt mit „Access key saved for <host>". Zum Erzeugen genügt Pythons
-`qrcode`; per adb geht es auch direkt:
+Printed as a QR code the ordinary camera app is enough — **no camera library
+and no camera permission in Nitterium**. The app confirms with "Access key
+saved for \<host\>". Python's `qrcode` is enough to generate it; over adb it
+works directly as well:
 
 ```bash
 adb shell "am start -a android.intent.action.VIEW -d 'nitterium://instance?url=…&key=…'"
 ```
 
-Die Anführungszeichen gehören **um den ganzen Befehl**: `adb shell` reicht die
-Argumente an die Shell des Telefons weiter und verliert dabei die eigenen
-Quotes — ein nacktes `&` wird dort zum Hintergrund-Operator, `key=…` fällt weg,
-und ein leerer Schlüssel löscht den Eintrag.
+The quotes belong **around the whole command**: `adb shell` hands its arguments
+to the shell on the phone and loses the local quoting on the way — a bare `&`
+becomes a background operator there, `key=…` is dropped, and an empty key
+deletes the entry.
+
+Proof from production, same phone, same mobile network, WLAN off:
+
+```
+2a00:20:…            "GET /AnwaltUlbrich/status/2093855542447902741"  403   (no key)
+2a00:20:429b:f162:…  "GET /leeksmiau/status/2093914404077056392"      200   (key in the user agent)
+```
 
 ### Binary
 
-`bin/nitterium-heissa.apk` — Release, mit eigenem Schlüssel signiert
+`bin/nitterium-heissa.apk` — release, signed with an own key
 (SHA-256 `09c4e95e94d1a05f8c37710f7d1e0cad3f997610feb58f3826bd88731f38e3a4`,
-`CN=gerontec, O=heissa.de`). Der Keystore liegt **nicht** im Repo
-(`~/.android/nitterium-release.jks`); ohne ihn lässt sich kein Update über die
-installierte App drüberinstallieren.
+`CN=gerontec, O=heissa.de`). The keystore is **not** in the repository
+(`~/.android/nitterium-release.jks`); without it no update can be installed over
+the app already on the device.
 
-### Netz
+### Network
 
-`nitter.heissa.de` ist dual-stack (AAAA + A). Android nimmt per Happy Eyeballs
-IPv6 und fällt selbsttätig auf IPv4 zurück — in der App ist dafür nichts
-hardcodiert.
+`nitter.heissa.de` is dual stack (AAAA + A). Android picks IPv6 via Happy
+Eyeballs and falls back to IPv4 on its own — nothing about that is hardcoded in
+the app.
 
 ---
 
-## 2. Serverseite (heissa.de)
+## 2. Server side (heissa.de)
 
-Alles unter `server/` ist die bereinigte Fassung der laufenden Konfiguration
-(Zugangsdaten und private Adressen durch Platzhalter ersetzt).
+Everything under `server/` is the cleaned version of the running configuration
+(credentials and private addresses replaced by placeholders).
 
-### 2.1 Poll-Budget: 30 Requests pro Tag
+### 2.1 Poll budget: 30 requests per day
 
-Die Instanz fährt mit **einem** Session-Token (`~/nitter/sessions.jsonl`,
-Refresh alle 8 h). Seit dem Wegfall des kostenlosen Zugangs läuft
-`nitter_poll.py` nur noch mit versetzten Zeiten und kleinen Batches:
+The instance runs on **one** session token (`~/nitter/sessions.jsonl`, refreshed
+every 8 h). Since free access disappeared, `nitter_poll.py` only runs on
+staggered times and in small batches:
 
-| Zeit | Job | Requests/Lauf | Läufe/Tag | Summe |
+| Time | Job | Requests/run | Runs/day | Total |
 |---|---|---|---|---|
-| :10 alle 6 h | `--following SZwanglos --batch 3` | 3 | 4 | 12 |
-| :25 alle 6 h | `--user carol_herzog` | 1 | 4 | 4 |
-| :40 alle 6 h | `--user ZentraleV` | 1 | 4 | 4 |
-| :55 alle 6 h | `--user SHomburg` | 1 | 4 | 4 |
-| :10 um 6 und 18 Uhr | `--following Impf_Info --batch 3` | 3 | 2 | 6 |
+| :10 every 6 h | `--following SZwanglos --batch 3` | 3 | 4 | 12 |
+| :25 every 6 h | `--user carol_herzog` | 1 | 4 | 4 |
+| :40 every 6 h | `--user ZentraleV` | 1 | 4 | 4 |
+| :55 every 6 h | `--user SHomburg` | 1 | 4 | 4 |
+| :10 at 6 and 18 | `--following Impf_Info --batch 3` | 3 | 2 | 6 |
 
-Zwischen zwei Läufen liegen mindestens 15 Minuten, innerhalb eines Laufs
-pausiert der Poller 1,5–4,5 s je Account. Frequenz nie ohne Not erhöhen — die
-Sperre träfe den Account hinter dem Token.
+At least 15 minutes lie between two runs, and inside a run the poller pauses
+1.5–4.5 s per account. Never raise the frequency without need — a ban would hit
+the account behind the token.
 
-Historie holt man **nicht** über die API, sondern per Playwright über x.com mit
-der eingeloggten Browser-Session (`zentralev_backfill.py`, `carol_backfill.py`;
-14-Tage-Zeitschnitt, bricht erst nach 3 alten Posts ab — angepinnte alte Tweets
-lösen sonst einen Fehlabbruch aus).
+History is **not** fetched through the API but with Playwright over x.com using
+the logged-in browser session (`zentralev_backfill.py`, `carol_backfill.py`;
+14-day cut, stops only after 3 old posts — pinned old tweets would otherwise
+end the run too early).
 
-### 2.2 Healthcheck: nicht auf eine Tweet-Seite zeigen lassen
+### 2.2 Health check: do not point it at a tweet page
 
-Der Docker-Healthcheck rief alle 30 s `/Jack/status/20` ab. Tweet-Detailseiten
-brauchen `ConversationTimeline`, und genau dieser Endpoint ist für eine
-Gratis-Session dauerhaft leer: **2.880 vergebliche API-Versuche pro Tag**,
-~400 Log-Zeilen pro Stunde, rund um die Uhr. Die Seite selbst kam aus dem
-Redis-Cache und lieferte 200, deshalb galt der Container als „healthy".
+The Docker health check requested `/Jack/status/20` every 30 s. Tweet detail
+pages need `ConversationTimeline`, and that endpoint is permanently empty for a
+free session: **2,880 futile API attempts per day**, ~400 log lines per hour,
+around the clock. The page itself came from the Redis cache and returned 200, so
+the container counted as "healthy".
 
-Ziel ist jetzt eine gecachte RSS-Seite:
+The target is a cached RSS page instead:
 
 ```yaml
 healthcheck:
   test: wget -nv --tries=1 --spider http://127.0.0.1:8080/SZwanglos/rss || exit 1
 ```
 
-### 2.3 Fremdzugriffe: nur das sperren, was einen Poll auslöst
+### 2.3 Foreign access: block only what triggers a poll
 
-Gemessen: 77 Abrufe von Tweet-Detailseiten in 5,5 Minuten von **77
-verschiedenen IPs**, jede IP genau einmal, jede Tweet-ID genau einmal — ein
-Proxy-Pool, der eine alphabetische Accountliste durchgeht. Jeder dieser
-Requests ist zwangsläufig ein Cache-Miss und damit ein Poll auf unsere Session.
-Per-IP-Regeln greifen dagegen prinzipiell nicht.
+Measured: 77 requests to tweet detail pages in 5.5 minutes from **77 different
+IPs**, every IP exactly once, every tweet ID exactly once — a proxy pool walking
+an alphabetical account list. Every one of those requests is necessarily a cache
+miss and therefore a poll on our session. Per-IP rules cannot catch that in
+principle.
 
-Deshalb sperrt der vhost genau einen Pfad für Fremde und lässt alles andere
-offen (`server/nitter-le-ssl.conf.example`):
+So the vhost closes exactly one path to strangers and leaves everything else
+open (`server/nitter-le-ssl.conf.example`):
 
 ```apache
 <LocationMatch "^/[A-Za-z0-9_]+/status/[0-9]+">
-    Require ip 127.0.0.1 ::1 <eigene Adressen, WireGuard, LANs>
+    Require ip 127.0.0.1 ::1 <own addresses, WireGuard, LANs>
+    Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<key>#"
 </LocationMatch>
 ```
 
-* gesperrt: nur `/<user>/status/<id>` — der einzige Pfad, der pro Abruf zu X geht
-* offen für alle: Profile, Timelines, RSS, Suche, Bilder, Statik — alles, was
-  aus dem Redis-Cache kommt und X nicht anfasst
-* Wirkung: 19 Scraper-Requests/Minute laufen auf 403, im Nitter-Log **0**
-  API-Versuche (vorher ~400/h)
+* closed: only `/<user>/status/<id>` — the single path that reaches X per request
+* open to everyone: profiles, timelines, RSS, search, images, static files —
+  everything served from the Redis cache that never touches X
+* effect: 19 scraper requests/minute run into 403, and the Nitter log shows **0**
+  API attempts (before: ~400/h)
 
-**Falle:** `Require ip` braucht `mod_authz_host`. War es nicht geladen, scheitert
-der Reload mit „Unknown Authz provider: ip" und Apache bleibt unten — also
-`a2enmod authz_host` vorher, `apachectl configtest` danach.
+**Trap:** `Require ip` needs `mod_authz_host`. If it was not loaded, the reload
+fails with "Unknown Authz provider: ip" and Apache stays down — so `a2enmod
+authz_host` first, `apachectl configtest` afterwards.
 
-Als Auffangnetz für einzelne Dauerläufer läuft zusätzlich die fail2ban-Jail
-`nitter-scrape` (`server/fail2ban-*`): 30 Tweet-Seiten in 10 Minuten pro IP,
-dann 1 h Sperre, eskalierend bis 1 Tag; eigene Netze in `ignoreip`. Sie braucht
-den Zugriffs-Log `/var/log/apache2/nitter_access.log`, den beide Nitter-vhosts
-schreiben.
+As a safety net against individual long runners, the fail2ban jail
+`nitter-scrape` (`server/fail2ban-*`) runs as well: 30 tweet pages in 10 minutes
+per IP, then a 1 h ban, escalating up to one day; own networks in `ignoreip`. It
+needs the access log `/var/log/apache2/nitter_access.log`, which both Nitter
+vhosts write.
 
-### 2.4 Archiv-Gateway: live und Archiv ohne Umschalten
+### 2.4 Archive gateway: live and archive without switching
 
-`server/gateway.php` liegt auf dem Server unter
-`/var/www/nitter_archive/gateway.php` und ist den Profil- und Feed-Pfaden
-vorgeschaltet:
+`server/gateway.php` sits on the server at
+`/var/www/nitter_archive/gateway.php` and is placed in front of the profile and
+feed paths:
 
 ```apache
 ProxyPass /_archive !
@@ -190,43 +196,42 @@ ProxyPassMatch "^/(?!about$|settings$|search$|explore$|css$|js$|pic$|fonts$)[A-Z
 RewriteRule "^/(?!…)([A-Za-z0-9_][A-Za-z0-9_,]{0,120})/?$" /_archive/gateway.php?u=$1 [QSA,PT,L]
 ```
 
-Ablauf je Aufruf:
+What happens per call:
 
-1. Gateway holt die Seite von `127.0.0.1:9497` und reicht Cookie, User-Agent und
-   Accept-Language weiter.
-2. Kommt **HTTP 200 mit `timeline-item`** zurück, wird die Antwort unverändert
-   durchgereicht — live, ohne Umweg.
-3. Sonst (429, leere Zeitleiste trotz 200, Backend weg) rendert das Gateway
-   dieselbe Ansicht aus `wagodb.nitter_posts` im Nitter-Markup, mit
-   Nitter-Stylesheet und einem Hinweisstreifen, **HTTP 200**.
-4. Ist auch im Archiv nichts, wird die Originalantwort der Instanz gezeigt.
+1. The gateway fetches the page from `127.0.0.1:9497` and passes cookie, user
+   agent and Accept-Language along.
+2. If **HTTP 200 with `timeline-item`** comes back, the response is passed
+   through unchanged — live, no detour.
+3. Otherwise (429, empty timeline despite 200, backend gone) the gateway renders
+   the same view from `wagodb.nitter_posts` in Nitter's markup, with Nitter's
+   stylesheet and a notice strip, **HTTP 200**.
+4. If the archive has nothing either, the instance's original response is shown.
 
-Der Inhaltstest ist der Punkt: wenn die API ganz stirbt, antwortet Nitter mit
-200 und leerer Zeitleiste — ein Fallback über `ErrorDocument` würde dann nie
-auslösen.
+The content test is the point: when the API dies completely, Nitter answers 200
+with an empty timeline — a fallback via `ErrorDocument` would never fire.
 
-Komma-Listen sind abgedeckt, weil die App ihren Feed als `/<user1>,<user2>`
-lädt; das Archiv mischt dann beide Accounts nach Zeit.
+Comma lists are covered because the app loads its feed as `/<user1>,<user2>`;
+the archive then merges both accounts by time.
 
-Getestet mit gestopptem Container:
+Tested with the container stopped:
 
 ```
-/SZwanglos                 → HTTP 200, 19 Posts aus dem Archiv
-/SZwanglos,carol_herzog    → HTTP 200, 26 Posts gemischt, Hinweisstreifen
-danach wieder live         → HTTP 200, Passthrough ohne Hinweis
+/SZwanglos                 → HTTP 200, 19 posts from the archive
+/SZwanglos,carol_herzog    → HTTP 200, 26 posts merged, notice strip
+live again afterwards      → HTTP 200, passthrough without notice
 ```
 
-Datenbankzugang: `gateway.php` erwartet das Passwort in `NITTER_DB_PASS`
-(auf dem Server steht es direkt in der Datei, die hier abgelegte Fassung ist
-bereinigt). Gelesen wird `wagodb.nitter_posts`, Spalte `account`.
+Database access: `gateway.php` expects the password in `NITTER_DB_PASS` (on the
+server it sits directly in the file; the copy stored here is cleaned). It reads
+`wagodb.nitter_posts`, column `account`.
 
 ---
 
-## 3. Was im Log steht
+## 3. What the log says
 
-Ohne bezahlte API sind Timelines und Profile in Ordnung — `UserTweets` taucht
-im Nitter-Log nie als Fehler auf. Kaputt sind die Thread-Ansichten:
-`no sessions available for API: …/ConversationTimeline`. Die Abstürze
-(`SIGSEGV: Illegal storage access`, 27 in einer Woche, in Schüben mit 2–7
-Sofort-Neustarts) sind der Grund, wenn die Instanz „weg" wirkt — keine Sperre,
-kein 401/403.
+Without a paid API, timelines and profiles are fine — `UserTweets` never shows
+up as an error in the Nitter log. What is broken are the thread views:
+`no sessions available for API: …/ConversationTimeline`. The crashes
+(`SIGSEGV: Illegal storage access`, 27 in one week, in bursts with 2–7 immediate
+restarts) are the reason when the instance appears to be "gone" — no ban, no
+401/403.

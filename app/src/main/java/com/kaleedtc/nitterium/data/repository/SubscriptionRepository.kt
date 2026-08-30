@@ -16,8 +16,8 @@ import java.io.File
 
 class SubscriptionRepository(context: Context) {
     companion object {
-        // Die Konten erster Ordnung: genau die, die nitter_poll.py auf heissa.de
-        // direkt abfragt und die deshalb vollstaendig in der Datenbank stehen.
+        // The first-order accounts: exactly those that nitter_poll.py polls
+        // directly on heissa.de, and which are therefore complete in the database.
         val DEFAULT_SUBSCRIPTIONS = listOf(
             "SZwanglos", "carol_herzog", "ZentraleV", "SHomburg", "Impf_Info"
         )
@@ -55,7 +55,7 @@ class SubscriptionRepository(context: Context) {
                 _subscriptions.tryEmit(emptyList())
             }
         } else {
-            // Erststart: Standard-Abos vorbelegen
+            // First start: seed the default subscriptions
             saveList(
                 DEFAULT_SUBSCRIPTIONS.map { name ->
                     Subscription(username = name, instanceUrl = DEFAULT_INSTANCE_URL)

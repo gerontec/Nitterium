@@ -93,10 +93,10 @@ fun NitterWebView(
     var longPressedUrl by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
-    // Zugangsschluessel dieser Instanz (Einstellungen). Er wandert in den
-    // User-Agent und geht damit nur an den Host, fuer den er eingetragen
-    // wurde - Instanzen, die einzelne Pfade nur Bekannten oeffnen, lassen
-    // die App so durch, ohne dass eine feste IP noetig waere.
+    // Access key for this instance (from settings). It is appended to the
+    // user agent and therefore only ever reaches the host it was entered for -
+    // instances that open single paths to known clients let the app through
+    // without anyone needing a fixed IP address.
     val preferencesRepository = remember { UserPreferencesRepository(context) }
     val instanceKeys by preferencesRepository.instanceKeys.collectAsState(initial = emptyMap())
     val instanceKey = instanceKeys[UserPreferencesRepository.hostOf(url)] ?: ""
@@ -433,17 +433,17 @@ fun NitterWebView(
     Box(modifier = modifier.fillMaxSize()) {
         var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
-        // Wird der Schluessel in den Einstellungen geaendert, bekommt die
-        // schon laufende WebView den neuen User-Agent und laedt neu.
+        // When the key is changed in settings, hand the new user agent to the
+        // WebView that is already running and reload.
         LaunchedEffect(instanceKey, webViewRef) {
-            val wv = webViewRef ?: return@LaunchedEffect
-            val gewuenscht = mitSchluessel(
-                wv.settings.userAgentString.substringBefore(" Nitterium/"),
+            val view = webViewRef ?: return@LaunchedEffect
+            val wanted = withKey(
+                view.settings.userAgentString.substringBefore(" Nitterium/"),
                 instanceKey
             )
-            if (wv.settings.userAgentString != gewuenscht) {
-                wv.settings.userAgentString = gewuenscht
-                wv.reload()
+            if (view.settings.userAgentString != wanted) {
+                view.settings.userAgentString = wanted
+                view.reload()
             }
         }
         val webViewStateBundle = rememberSaveable(
@@ -532,7 +532,7 @@ fun NitterWebView(
                         cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                         mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         val defaultUA = userAgentString
-                        userAgentString = mitSchluessel(
+                        userAgentString = withKey(
                             defaultUA.replace("; wv", "")
                                 .replace(Regex("Version/\\d+\\.\\d+\\s+"), ""),
                             instanceKey
@@ -916,6 +916,6 @@ class NitterInterface(
     }
 }
 
-/** Haengt den Instanz-Schluessel an den User-Agent; ohne Schluessel unveraendert. */
-private fun mitSchluessel(userAgent: String, key: String): String =
+/** Appends the instance access key to the user agent; unchanged without a key. */
+private fun withKey(userAgent: String, key: String): String =
     if (key.isBlank()) userAgent else "$userAgent Nitterium/${key.trim()}"

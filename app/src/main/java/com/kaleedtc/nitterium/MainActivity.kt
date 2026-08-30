@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        intentUrl.value = if (nimmSchluessel(intent)) null else intent?.dataString
+        intentUrl.value = if (acceptInstanceKey(intent)) null else intent?.dataString
 
         val app = application as NitteriumApplication
         val viewModel: MainViewModel by viewModels {
@@ -89,18 +89,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        intentUrl.value = if (nimmSchluessel(intent)) null else intent.dataString
+        intentUrl.value = if (acceptInstanceKey(intent)) null else intent.dataString
     }
 
     /**
-     * Nimmt einen Zugangsschluessel aus einem Verweis entgegen:
+     * Takes an access key from a link:
      * `nitterium://instance?url=https://nitter.example&key=...`
      *
-     * Gedacht fuer QR-Codes und Einrichtungsverweise - 32 Zeichen abzutippen
-     * ist auf dem Telefon fehleranfaellig. Gibt true zurueck, wenn der Verweis
-     * ein Schluessel war und nicht als Seite geoeffnet werden soll.
+     * Meant for QR codes and setup links - typing 32 characters on a phone is
+     * error prone. Returns true when the link carried a key and must not be
+     * opened as a page.
      */
-    private fun nimmSchluessel(intent: android.content.Intent?): Boolean {
+    private fun acceptInstanceKey(intent: android.content.Intent?): Boolean {
         val data = intent?.data ?: return false
         if (data.scheme != "nitterium" || data.host != "instance") return false
         val url = data.getQueryParameter("url") ?: data.getQueryParameter("host") ?: return true
