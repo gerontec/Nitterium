@@ -21,6 +21,7 @@ mehr verfügbar ist.
 | `data/repository/UserPreferencesRepository.kt` | Default-Instanz + Default-Tab `Feed` |
 | `ui/feature/settings/SettingsContract.kt`, `MainViewModel.kt`, `ui/NitteriumApp.kt` | Default-Tab `Feed` |
 | `data/repository/SubscriptionRepository.kt` | Erststart legt die Abos `SZwanglos` und `carol_herzog` an |
+| `data/repository/UserPreferencesRepository.kt`, `ui/common/NitterWebView.kt`, `ui/feature/settings/*`, `MainActivity.kt` | **Zugangsschlüssel je Instanz** — siehe unten |
 | `app/build.gradle.kts` | `lint { checkReleaseBuilds = false }` — AGP-Lint stürzt beim Analysieren ab (UAST/`AsyncExecutionService`-Bug) und blockiert sonst den Release-Build |
 
 Die App lädt ihren Feed als `https://nitter.heissa.de/<user1>,<user2>` (Nitters
@@ -42,6 +43,48 @@ bricht mit „Toolchain … does not provide the required capabilities:
 [JAVA_COMPILER]" ab). Android SDK; `compileSdk 37` lädt AGP selbst nach,
 `cmdline-tools` sind dafür nicht nötig, aber `~/Android/Sdk/licenses` muss
 existieren.
+
+
+### Zugangsschlüssel je Instanz
+
+Die Tweet-Detailseiten der eigenen Instanz sind für Fremde gesperrt (siehe
+2.3). Eine Adressliste im vhost trägt aber nur, solange das Telefon im WLAN
+hängt: im Mobilfunk und nach jedem Präfixwechsel der FritzBox fällt die App
+heraus und bekommt auf dem eigenen Host ein 403.
+
+Deshalb weist sich die App aus. In den Einstellungen steht unter der
+Instanz-URL ein Feld **Instance access key (optional)**; der Wert wird je
+**Host** gespeichert (`instance_keys`, JSON `{host: schlüssel}`) und hängt als
+` Nitterium/<schlüssel>` am User-Agent — nur an genau diese Instanz, nie an
+eine andere. Ohne Schlüssel verhält sich die App exakt wie vorher.
+
+Serverseite, eine Zeile im `LocationMatch`:
+
+```apache
+Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<schlüssel>#"
+```
+
+**Eintragen ohne Tippen.** 32 Zeichen auf dem Telefon abzutippen geht schief —
+gemessen: aus `b208675f926a…` wurde `b8675f92a64c…`. Die App nimmt den
+Schlüssel deshalb auch über einen Verweis entgegen:
+
+```
+nitterium://instance?url=https%3A%2F%2Fnitter.heissa.de&key=<schlüssel>
+```
+
+Als QR-Code gedruckt reicht die normale Kamera-App — **keine
+Kamerabibliothek und keine Kameraberechtigung in Nitterium**. Die App
+bestätigt mit „Access key saved for <host>". Zum Erzeugen genügt Pythons
+`qrcode`; per adb geht es auch direkt:
+
+```bash
+adb shell "am start -a android.intent.action.VIEW -d 'nitterium://instance?url=…&key=…'"
+```
+
+Die Anführungszeichen gehören **um den ganzen Befehl**: `adb shell` reicht die
+Argumente an die Shell des Telefons weiter und verliert dabei die eigenen
+Quotes — ein nacktes `&` wird dort zum Hintergrund-Operator, `key=…` fällt weg,
+und ein leerer Schlüssel löscht den Eintrag.
 
 ### Binary
 

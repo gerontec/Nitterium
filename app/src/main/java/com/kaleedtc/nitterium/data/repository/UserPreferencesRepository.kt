@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_preferences")
 
@@ -27,6 +28,7 @@ class UserPreferencesRepository(
         val DEFAULT_TAB = stringPreferencesKey("default_tab")
         val BLOCK_DIRECT_X = booleanPreferencesKey("block_direct_x")
         val CUSTOM_INSTANCES = androidx.datastore.preferences.core.stringSetPreferencesKey("custom_instances")
+        val INSTANCE_KEYS = stringPreferencesKey("instance_keys")
     }
 
     val instanceUrl: Flow<String> = context.dataStore.data
@@ -138,6 +140,46 @@ class UserPreferencesRepository(
     suspend fun setBlockDirectX(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.BLOCK_DIRECT_X] = enabled
+        }
+    }
+
+    /**
+     * Zugangsschluessel je Instanz, abgelegt als JSON `{host: schluessel}`.
+     *
+     * Manche Instanzen - selbst betriebene zumal - geben teure Pfade nur
+     * Anfragen frei, die sich ausweisen koennen. Der Schluessel gehoert
+     * deshalb zur Instanz und nicht zur App: er geht ausschliesslich an den
+     * Host, fuer den er eingetragen wurde, und nie an eine andere Instanz.
+     */
+    val instanceKeys: Flow<Map<String, String>> = context.dataStore.data
+        .map { preferences -> leseSchluessel(preferences[PreferencesKeys.INSTANCE_KEYS]) }
+
+    fun instanceKeyFor(url: String): Flow<String> =
+        instanceKeys.map { it[hostOf(url)] ?: "" }
+
+    suspend fun setInstanceKey(url: String, key: String) {
+        val host = hostOf(url)
+        context.dataStore.edit { preferences ->
+            val map = leseSchluessel(preferences[PreferencesKeys.INSTANCE_KEYS]).toMutableMap()
+            if (key.isBlank()) map.remove(host) else map[host] = key.trim()
+            preferences[PreferencesKeys.INSTANCE_KEYS] = Json.encodeToString(map)
+        }
+    }
+
+    companion object {
+        private fun leseSchluessel(raw: String?): Map<String, String> =
+            if (raw.isNullOrBlank()) emptyMap()
+            else try {
+                Json.decodeFromString<Map<String, String>>(raw)
+            } catch (_: Exception) {
+                emptyMap()
+            }
+
+        /** Nur der Host zaehlt - Schema, Port und Schraegstriche nicht. */
+        fun hostOf(url: String): String = try {
+            java.net.URI(url.trim()).host?.lowercase() ?: url.trim().lowercase()
+        } catch (_: Exception) {
+            url.trim().lowercase()
         }
     }
 }

@@ -274,6 +274,31 @@ fun AppSettingsList(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Zugangsschluessel der gewaehlten Instanz. Er geht als Zusatz im
+            // User-Agent mit und nur an diesen Host - Instanzen, die teure
+            // Pfade nur Bekannten oeffnen, lassen die App damit durch.
+            // Eigener Tippzustand: der gespeicherte Wert kommt asynchron aus dem
+            // DataStore zurueck: haengt das Feld direkt daran, ueberholt jede
+            // schnelle Eingabe den Rueckweg und einzelne Zeichen gehen verloren.
+            var keyInput by rememberSaveable(state.instanceUrl) { mutableStateOf(state.instanceKey) }
+            LaunchedEffect(state.instanceKey) {
+                if (keyInput.isEmpty() && state.instanceKey.isNotEmpty()) keyInput = state.instanceKey
+            }
+
+            OutlinedTextField(
+                value = keyInput,
+                onValueChange = {
+                    keyInput = it
+                    onEvent(SettingsEvent.UpdateInstanceKey(it))
+                },
+                label = { Text(stringResource(R.string.instance_access_key)) },
+                placeholder = { Text(stringResource(R.string.instance_access_key_hint)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
             Spacer(modifier = Modifier.height(24.dp))
         }
 

@@ -11,6 +11,10 @@
         Require ip 127.0.0.1 ::1 <eigene-IPv4> 74.208.77.214 <vps-ipv4>
         Require ip <eigenes-IPv6-Praefix>::/64 2607:f1c0:f081:e500::/64
         Require ip 10.8.0.0/24 10.9.0.0/24 192.168.5.0/24 192.168.178.0/24
+        # Ausweis statt fester Adresse: Nitterium haengt den je Instanz
+        # eingetragenen Schluessel an den User-Agent. Damit kommt die App
+        # aus jedem Netz durch - Mobilfunk und wechselnde Praefixe inklusive.
+        Require expr "%{HTTP_USER_AGENT} =~ m#Nitterium/<schluessel>#"
     </LocationMatch>
 
 

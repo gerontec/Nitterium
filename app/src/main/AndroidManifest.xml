@@ -25,6 +25,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Zugangsschluessel per Verweis setzen: nitterium://instance?url=...&key=...
+                 Damit laesst sich ein Schluessel per QR-Code oder Verweis uebernehmen,
+                 statt 32 Zeichen abzutippen. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="nitterium" android:host="instance" />
+            </intent-filter>
+
             <!-- Deep Links -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

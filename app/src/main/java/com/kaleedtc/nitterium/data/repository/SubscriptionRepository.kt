@@ -16,7 +16,11 @@ import java.io.File
 
 class SubscriptionRepository(context: Context) {
     companion object {
-        val DEFAULT_SUBSCRIPTIONS = listOf("SZwanglos", "carol_herzog")
+        // Die Konten erster Ordnung: genau die, die nitter_poll.py auf heissa.de
+        // direkt abfragt und die deshalb vollstaendig in der Datenbank stehen.
+        val DEFAULT_SUBSCRIPTIONS = listOf(
+            "SZwanglos", "carol_herzog", "ZentraleV", "SHomburg", "Impf_Info"
+        )
         const val DEFAULT_INSTANCE_URL = "https://nitter.heissa.de"
     }
 
