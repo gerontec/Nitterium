@@ -169,8 +169,9 @@ open (`server/nitter-le-ssl.conf.example`):
 ```
 
 * closed: only `/<user>/status/<id>` — the single path that reaches X per request
-* open to everyone: profiles, timelines, RSS, search, images, static files —
-  everything served from the Redis cache that never touches X
+* open to everyone: profiles, timelines, RSS, search, images, static files.
+  Images and static files come from the cache and never touch X; profiles and
+  search do reach the API, which is what the brake in 2.4 is for
 * effect: 19 scraper requests/minute run into 403, and the Nitter log shows **0**
   API attempts (before: ~400/h)
 
@@ -184,7 +185,34 @@ per IP, then a 1 h ban, escalating up to one day; own networks in `ignoreip`. It
 needs the access log `/var/log/apache2/nitter_access.log`, which both Nitter
 vhosts write.
 
-### 2.4 Archive gateway: live and archive without switching
+### 2.4 API brake: what a stranger may cost
+
+Blocking `/status/` protects the session against the scraper pool, but profile
+and timeline pages stay open — and they are **not** free: Nitter caches
+profiles (`pr2:`, `p:` in Redis), not the timelines, so every profile view is an
+API call on our one session.
+
+`gateway.php` therefore counts. Requests carrying the instance access key in the
+user agent are our own clients and stay unlimited. Everyone else may trigger at
+most **2 live fetches per hour and per address** (IPv6 folded to the /64, so a
+prefix counts as one client); past that the archive answers, which never touches
+X. The counter lives in `wagodb.nitter_live_quota` and is created on first use.
+
+```
+GET /SZwanglos  (no key)   → 200, live timeline
+GET /SZwanglos  (no key)   → 200, live timeline
+GET /SZwanglos  (no key)   → 200, archive view with a notice
+GET /SZwanglos  (with key) → 200, live timeline, 21 items
+```
+
+Without a reachable database the brake stays permissive rather than locking
+everyone out.
+
+**Still open:** `/search` and `/<user>/rss` are proxied straight to Nitter and
+are not counted — the rewrite only routes bare profile and feed paths through
+the gateway.
+
+### 2.5 Archive gateway: live and archive without switching
 
 `server/gateway.php` sits on the server at
 `/var/www/nitter_archive/gateway.php` and is placed in front of the profile and
